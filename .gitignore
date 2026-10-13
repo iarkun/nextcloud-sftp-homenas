@@ -1,0 +1,20 @@
+# Geheimnisse
+.env
+
+# Laufzeitdaten der Container (werden beim ersten Start angelegt)
+caddy_data/
+caddy_config/
+nc_home/
+nc_home-config/
+nc_home-data/
+db-nextcloud/
+redis-nextcloud/
+
+# ProFTPd: Host-Keys, Zertifikate, Logs, PID-Dateien
+proftpd/config/ssh/
+proftpd/config/ftps-tls/
+proftpd/logs/
+proftpd/run/
+
+# Datenbank-Dumps
+backup/

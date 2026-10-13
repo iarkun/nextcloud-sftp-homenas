@@ -1,0 +1,30 @@
+{
+	skip_install_trust
+}
+
+(nextcloud) {
+	request_body {
+		max_size 512MB
+	}
+
+	redir /.well-known/carddav   /remote.php/dav/ 301
+	redir /.well-known/caldav    /remote.php/dav/ 301
+	redir /.well-known/webfinger /index.php/.well-known/webfinger 301
+	redir /.well-known/nodeinfo  /index.php/.well-known/nodeinfo 301
+	redir /.well-known/ocm       /index.php/.well-known/ocm 301
+
+	reverse_proxy nextcloud:80
+}
+
+# LAN / mDNS: Zertifikat der internen Caddy-CA
+{$NC_LOCAL_FQDN} {
+	tls internal
+	# HSTS erst aktivieren, wenn die Caddy-Root-CA auf allen Clients importiert ist (Kapitel 8)
+	# header Strict-Transport-Security "max-age=15552000"
+	import nextcloud
+}
+
+# Unbekannte Hostnamen auf Port 80 ablehnen (≈ nginx "return 444")
+http:// {
+	abort
+}

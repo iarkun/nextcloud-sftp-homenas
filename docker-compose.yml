@@ -1,0 +1,116 @@
+services:
+  caddy:
+    image: caddy:2
+    container_name: caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      NC_LOCAL_FQDN: ${NC_LOCAL_FQDN}
+      NC_TS_FQDN: ${NC_TS_FQDN}
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./caddy_data:/data
+      - ./caddy_config:/config
+      # Tailscale (optional) – ohne Tailscale diese Zeile auskommentieren
+      - /var/run/tailscale/tailscaled.sock:/var/run/tailscale/tailscaled.sock
+    depends_on:
+      - nextcloud
+    networks:
+      - nextcloud-net
+
+  nextcloud:
+    image: nextcloud:35.0.1
+    container_name: nextcloud
+    restart: unless-stopped
+    environment:
+      # --- Datenbank: werden bei der Installation übernommen ---
+      MYSQL_HOST: db-nextcloud
+      MYSQL_DATABASE: nextcloud
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      # --- werden bei JEDEM Start ausgewertet ---
+      NEXTCLOUD_UPDATE: 1
+      NEXTCLOUD_INIT_HTACCESS: 1
+      PHP_MEMORY_LIMIT: 1G
+      PHP_UPLOAD_LIMIT: 512M
+      REDIS_HOST: redis-nextcloud
+      REDIS_HOST_PORT: 6379
+      REDIS_HOST_PASSWORD: ${REDIS_PASSWORD}
+      TRUSTED_PROXIES: ${NC_SUBNET}
+      OVERWRITEPROTOCOL: https
+      OVERWRITECLIURL: ${NC_CLI_URL}
+      # OVERWRITEHOST bewusst NICHT setzen – es gibt zwei gültige Hostnamen
+    volumes:
+      - ./nc_home:/var/www/html
+      - ./nc_home-config:/var/www/html/config
+      - ./nc_home-data:/var/www/html/data
+    depends_on:
+      db-nextcloud:
+        condition: service_healthy     # erst starten, wenn MariaDB bereit ist
+      redis-nextcloud:
+        condition: service_started
+    networks:
+      - nextcloud-net
+
+  redis-nextcloud:
+    image: redis:7.4
+    container_name: redis-nextcloud
+    restart: unless-stopped
+    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD}"]
+    volumes:
+      - ./redis-nextcloud:/data
+    networks:
+      - nextcloud-net
+
+  db-nextcloud:
+    image: mariadb:11.4
+    container_name: db-nextcloud
+    restart: unless-stopped
+    command: >
+      --transaction-isolation=READ-COMMITTED
+      --binlog-format=ROW
+      --innodb-log-file-size=256M
+      --slow-query-log=1
+      --long-query-time=2
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: nextcloud
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      MARIADB_AUTO_UPGRADE: 1
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    volumes:
+      - ./db-nextcloud:/var/lib/mysql
+    networks:
+      - nextcloud-net
+
+  proftpd:
+    image: iarkun/proftpd-nextcloud:1.1.0
+    container_name: proftpd
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - ./proftpd/config/passwd:/etc/passwd:ro
+      - ./proftpd/config/group:/etc/group:ro
+      - ./proftpd/config/shadow:/etc/shadow:ro
+      - ./proftpd/config/proftpd.conf:/etc/proftpd.conf:ro
+      - ./proftpd/config/ssh:/etc/ssh:rw
+      # - ./proftpd/config/ftps-tls:/etc/proftpd/tls:ro   # nur bei FTPS (Kapitel 11.6)
+      - ./nc_home-data:/nextcloud:rw
+      - ./proftpd/logs:/var/log/proftpd:rw
+      - ./proftpd/run:/run/proftpd:rw
+
+networks:
+  nextcloud-net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: ${NC_SUBNET}
