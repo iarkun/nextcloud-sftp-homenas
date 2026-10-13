@@ -47,7 +47,7 @@ Alle Dateien liegen bereits fertig in diesem Repository:
 ```bash
 sudo apt install -y git
 mkdir -p ~/container
-git clone https://github.com/<benutzer>/<repository>.git ~/container/multicontainer
+git clone https://github.com/iarkun/nextcloud-sftp-homenas.git ~/container/multicontainer
 cd ~/container/multicontainer
 mkdir -p proftpd/config/ssh proftpd/logs proftpd/run
 cp .env.example .env
